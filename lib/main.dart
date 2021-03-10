@@ -1,117 +1,333 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(MaterialApp(title: "Lista de Tarefas", home: Home()));
 }
 
-class MyApp extends StatelessWidget {
-  // This widget is the root of your application.
+class Home extends StatefulWidget {
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
-        primarySwatch: Colors.blue,
-        // This makes the visual density adapt to the platform that you run
-        // the app on. For desktop platforms, the controls will be smaller and
-        // closer together (more dense) than on mobile platforms.
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-      ),
-      home: MyHomePage(title: 'Flutter Demo Home Page'),
-    );
-  }
+  _HomeState createState() => _HomeState();
 }
 
-class MyHomePage extends StatefulWidget {
-  MyHomePage({Key key, this.title}) : super(key: key);
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class _HomeState extends State<Home> {
+  List _todoList = [];
+  Map<String, dynamic> _lastRemoved = Map();
+  int _lastRemovedPos;
 
   @override
-  _MyHomePageState createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  void initState() {
+    super.initState();
+    _readData().then((data) {
+      setState(() {
+        _todoList = json.decode(data);
+      });
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+      floatingActionButton: MyFloatingActionButton(),
+      body: Column(
+        children: <Widget>[
+          Padding(
+              padding: EdgeInsets.only(top: 100),
+              child: Column(
+                children: <Widget>[
+                  Padding(
+                      padding:
+                          EdgeInsets.only(top: 5.0, left: 50.0, right: 20.0),
+                      child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: <Widget>[
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child: Text(
+                                "Minhas Tarefas",
+                                softWrap: true,
+                                overflow: TextOverflow.fade,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 30,
+                                    color: Colors.black,
+                                    decoration: TextDecoration.none),
+                              ),
+                            )
+                          ])),
+                  Padding(
+                    padding: EdgeInsets.only(top: 5),
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          flex: 2,
+                          child: Container(
+                            margin: EdgeInsets.only(left: 50),
+                            color: Colors.grey,
+                            height: 1.5,
+                          ),
+                        )
+                      ],
+                    ),
+                  )
+                ],
+              )),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _refresh,
+              child: ListView.builder(
+                  padding: EdgeInsets.only(top: 10.0),
+                  itemCount: _todoList.length,
+                  itemBuilder: buildItem),
+            ),
+          ),
+        ],
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
+    );
+  }
+
+  Widget buildItem(context, index) {
+    return Dismissible(
+      key: Key(DateTime.now().millisecondsSinceEpoch.toString()),
+      background: Container(
+          color: Colors.red,
+          child: Padding(
+            padding: EdgeInsets.only(right: 10),
+            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              Padding(
+                  padding: EdgeInsets.only(right: 5),
+                  child: Text(
+                    "Apagar",
+                    style: TextStyle(color: Colors.white),
+                  )),
+              Icon(
+                Icons.delete,
+                color: Colors.white,
+              )
+            ]),
+          )),
+      direction: DismissDirection.endToStart,
+      child: CheckboxListTile(
+        controlAffinity: ListTileControlAffinity.leading,
+        tileColor:
+            _todoList[index]["ok"] ? Color(0xFFF0F0F0) : Color(0xFFFCFCFC),
+        title: Text(_todoList[index]["title"],
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            style: _todoList[index]["ok"]
+                ? TextStyle(
+                    decoration: TextDecoration.lineThrough,
+                    color: Colors.black,
+                    fontSize: 22.0,
+                  )
+                : TextStyle(color: Colors.black, fontSize: 22)),
+        value: _todoList[index]["ok"],
+        onChanged: (c) {
+          checkTodo(index, c);
+        },
+      ),
+      onDismissed: (direction) {
+        setState(() {
+          _lastRemoved = Map.from(_todoList[index]);
+          _lastRemovedPos = index;
+          _todoList.removeAt(index);
+          _saveData();
+
+          final snack = SnackBar(
+            content: Text("Tarefa ${_lastRemoved["title"]} removida."),
+            action: SnackBarAction(
+                label: "Desfazer",
+                onPressed: () {
+                  setState(() {
+                    _todoList.insert(_lastRemovedPos, _lastRemoved);
+                    _saveData();
+                  });
+                }),
+            duration: Duration(seconds: 2),
+          );
+          Scaffold.of(context).removeCurrentSnackBar();
+          Scaffold.of(context).showSnackBar(snack);
+        });
+      },
+    );
+  }
+
+  Future<File> _getFile() async {
+    final directory = await getApplicationDocumentsDirectory();
+    return File("${directory.path}/data.json");
+  }
+
+  Future<File> _saveData() async {
+    String data = json.encode(_todoList);
+    final file = await _getFile();
+    return file.writeAsString(data);
+  }
+
+  Future<String> _readData() async {
+    try {
+      final file = await _getFile();
+      return file.readAsString();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  void addTodo(String title) {
+    setState(() {
+      Map<String, dynamic> newTodo = Map();
+      newTodo["title"] = title;
+      newTodo["ok"] = false;
+      _todoList.add(newTodo);
+      _saveData();
+    });
+  }
+
+  void checkTodo(index, c) {
+    setState(() {
+      _todoList[index]["ok"] = c;
+      _saveData();
+    });
+  }
+
+  Future<Null> _refresh() async {
+    await Future.delayed(Duration(seconds: 1));
+
+    setState(() {
+      _todoList.sort((a, b) {
+        if (a["ok"] && !b["ok"])
+          return 1;
+        else if (!a["ok"] && b["ok"])
+          return -1;
+        else
+          return 0;
+      });
+
+      _saveData();
+    });
+
+    return null;
+  }
+}
+
+class MyFloatingActionButton extends StatefulWidget {
+  @override
+  _MyFloatingActionButtonState createState() => _MyFloatingActionButtonState();
+}
+
+class _MyFloatingActionButtonState extends State<MyFloatingActionButton> {
+  bool showFab = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return showFab
+        ? FloatingActionButton(
+            child: Icon(Icons.add),
+            onPressed: () {
+              var bottomSheetController = showBottomSheet(
+                  context: context, builder: (context) => BottomSheetWidget());
+              showFoatingActionButton(false);
+              bottomSheetController.closed.then((value) {
+                showFoatingActionButton(true);
+              });
+            },
+          )
+        : Container();
+  }
+
+  void showFoatingActionButton(bool value) {
+    setState(() {
+      showFab = value;
+    });
+  }
+}
+
+class BottomSheetWidget extends StatefulWidget {
+  @override
+  _BottomSheetWidgetState createState() => _BottomSheetWidgetState();
+}
+
+class _BottomSheetWidgetState extends State<BottomSheetWidget> {
+  bool addingTask = false;
+  bool success = false;
+
+  TextEditingController _todoController = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 5, left: 15, right: 15),
+      height: 160,
+      child: Column(
+          mainAxisSize: MainAxisSize.max,
           mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+          children: [
+            Container(
+              height: 125,
+              decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.all(Radius.circular(15)),
+                  boxShadow: [
+                    BoxShadow(
+                        blurRadius: 10,
+                        color: Colors.grey[300],
+                        spreadRadius: 5)
+                  ]),
+              child: Column(children: <Widget>[
+                Container(
+                    height: 50,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 10),
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 10),
+                    decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(10)),
+                    child: TextField(
+                      controller: _todoController,
+                      decoration: InputDecoration.collapsed(
+                        hintText: "Nova tarefa",
+                      ),
+                    )),
+                !addingTask
+                    ? MaterialButton(
+                        color: Colors.grey[800],
+                        onPressed: () async {
+                          setState(() {
+                            addingTask = true;
+                          });
+
+                          await Future.delayed(Duration(milliseconds: 500));
+
+                          context
+                              .findAncestorStateOfType<_HomeState>()
+                              .addTodo(_todoController.text);
+                          _todoController.text = "";
+
+                          setState(() {
+                            success = true;
+                          });
+
+                          await Future.delayed(Duration(milliseconds: 500));
+                          Navigator.pop(context);
+                        },
+                        child: Text(
+                          "Adicionar",
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      )
+                    : !success
+                        ? CircularProgressIndicator()
+                        : Icon(
+                            Icons.check,
+                            color: Colors.green,
+                          ),
+              ]),
+            )
+          ]),
     );
   }
 }
